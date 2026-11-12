@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PortfolioPilot | Demo Portfolio</title>
+    <meta
+      name="description"
+      content="Demo stock portfolio management application with simulated holdings, buy and sell actions, recommendations, and transaction history."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="appSidebar">
+        <div class="brand-wrap">
+          <div class="brand-mark">PP</div>
+          <div class="brand-copy">
+            <h1>PortfolioPilot</h1>
+            <span class="demo-pill">DEMO MODE</span>
+          </div>
+        </div>
+
+        <nav class="side-nav" aria-label="Portfolio sections">
+          <button class="nav-link active" data-section="dashboard" type="button">
+            <i class="bi bi-speedometer2"></i>
+            <span>Dashboard</span>
+          </button>
+          <button class="nav-link" data-section="balance" type="button">
+            <i class="bi bi-wallet2"></i>
+            <span>Available Balance</span>
+          </button>
+          <button class="nav-link" data-section="holdings" type="button">
+            <i class="bi bi-briefcase"></i>
+            <span>My Holdings</span>
+          </button>
+          <button class="nav-link" data-section="recommendations" type="button">
+            <i class="bi bi-star"></i>
+            <span>Top Recommendations</span>
+          </button>
+          <button class="nav-link" data-section="trades" type="button">
+            <i class="bi bi-arrow-repeat"></i>
+            <span>Buy / Sell Stocks</span>
+          </button>
+          <button class="nav-link" data-section="transactions" type="button">
+            <i class="bi bi-clock-history"></i>
+            <span>Transaction History</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-note">
+          DEMO MODE — All stock prices, holdings, recommendations, and transactions are simulated sample data. No real trades are executed.
+        </div>
+        <button id="resetDemoBtn" class="sidebar-reset" type="button">
+          <i class="bi bi-arrow-counterclockwise"></i>
+          <span>Reset demo data</span>
+        </button>
+      </aside>
+
+      <main class="content-area">
+        <header class="topbar">
+          <div class="topbar-leading">
+            <button id="desktopSidebarToggle" class="menu-toggle desktop-menu-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true">
+              <i class="bi bi-layout-sidebar"></i>
+            </button>
+            <button id="mobileSidebarToggle" class="menu-toggle mobile-menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false">
+              <i class="bi bi-list"></i>
+            </button>
+            <div class="topbar-copy">
+              <p class="eyebrow">Portfolio overview</p>
+              <h2>Welcome to your portfolio</h2>
+            </div>
+          </div>
+          <div class="topbar-meta">
+            <span id="currentDate" class="current-date"></span>
+            <span class="demo-indicator">SIMULATED DATA</span>
+          </div>
+        </header>
+
+        <section id="dashboard" class="page-section active">
+          <div class="section-intro">
+            <div>
+              <h3>Portfolio overview</h3>
+              <p>A clear snapshot of your simulated investments and cash balance.</p>
+            </div>
+          </div>
+          <div class="stats-grid" id="statsGrid"></div>
+
+          <div class="dashboard-grid">
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <h3>Position performance</h3>
+                  <p class="panel-subtitle">Cost basis compared with illustrative sample value</p>
+                </div>
+              </div>
+              <div class="chart-panel">
+                <canvas id="performanceChart" height="220" aria-label="Position cost basis and sample value comparison"></canvas>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <h3>Portfolio allocation</h3>
+                  <p class="panel-subtitle">Share of current holdings by sample market value</p>
+                </div>
+              </div>
+              <div class="chart-panel">
+                <canvas id="portfolioChart" height="220" aria-label="Current sample holdings allocation"></canvas>
+              </div>
+              <div id="allocationList" class="allocation-list"></div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid dashboard-lower-grid">
+            <div class="panel">
+              <div class="panel-header">
+                <div>
+                  <h3>Recent activity</h3>
+                  <p class="panel-subtitle">Latest simulated portfolio transactions</p>
+                </div>
+              </div>
+              <div id="recentTransactions" class="transaction-list"></div>
+            </div>
+
+            <div class="panel quick-actions-panel">
+              <div class="panel-header">
+                <div>
+                  <h3>Quick actions</h3>
+                  <p class="panel-subtitle">Place a simulated order</p>
+                </div>
+              </div>
+              <div class="quick-actions">
+                <button class="btn btn-primary" id="quickBuyBtn" type="button">
+                  <i class="bi bi-plus-circle"></i>
+                  Buy stocks
+                </button>
+                <button class="btn btn-secondary" id="quickSellBtn" type="button">
+                  <i class="bi bi-dash-circle"></i>
+                  Sell holdings
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="balance" class="page-section">
+          <div class="section-intro">
+            <div>
+              <h3>Available balance</h3>
+              <p>Track demo cash, simulated purchases, and sale proceeds.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Cash summary</h3>
+                <p class="panel-subtitle">Balances update with each simulated transaction</p>
+              </div>
+            </div>
+            <div class="balance-grid">
+              <div class="metric-card">
+                <span class="metric-label">Initial demo balance</span>
+                <strong id="initialBalanceValue">₹0</strong>
+              </div>
+              <div class="metric-card primary">
+                <span class="metric-label">Current available balance</span>
+                <strong id="cashBalanceValue">₹0</strong>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Total spent on purchases</span>
+                <strong id="totalSpentValue">₹0</strong>
+              </div>
+              <div class="metric-card success">
+                <span class="metric-label">Money received from sales</span>
+                <strong id="totalReceivedValue">₹0</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="holdings" class="page-section">
+          <div class="section-intro">
+            <div>
+              <h3>My holdings</h3>
+              <p>Positions, remaining cost basis, and illustrative sample values.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header controls-row">
+              <div>
+                <h3>Active positions</h3>
+                <p class="panel-subtitle">Holdings and calculated profit or loss</p>
+              </div>
+              <div class="table-controls">
+                <input id="holdingsSearch" type="search" placeholder="Search holdings" aria-label="Search holdings" />
+                <select id="holdingsSort" aria-label="Sort holdings">
+                  <option value="company-asc">Company A–Z</option>
+                  <option value="market-desc">Market value: high to low</option>
+                  <option value="pnl-desc">Profit/Loss: high to low</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table portfolio-table">
+                <thead>
+                  <tr>
+                    <th>Company</th>
+                    <th>Symbol</th>
+                    <th>Shares</th>
+                    <th>Average price</th>
+                    <th>Current price</th>
+                    <th>Total invested</th>
+                    <th>Market value</th>
+                    <th>P/L</th>
+                    <th>P/L %</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="holdingsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="recommendations" class="page-section">
+          <div class="section-intro">
+            <div>
+              <h3>Top recommendations</h3>
+              <p>Predefined examples for learning with simulated stock data.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Explore sample stocks</h3>
+                <p class="panel-subtitle">Illustrative ideas only; not financial advice</p>
+              </div>
+            </div>
+            <div id="recommendationsGrid" class="recommendations-grid"></div>
+            <p class="disclaimer">
+              These are illustrative educational recommendations using sample data. They are not financial advice.
+            </p>
+          </div>
+        </section>
+
+        <section id="trades" class="page-section">
+          <div class="section-intro">
+            <div>
+              <h3>Buy / Sell stocks</h3>
+              <p>Simulate an order using fixed sample prices. No real trades are executed.</p>
+            </div>
+          </div>
+          <div class="trade-tabs" role="tablist" aria-label="Choose simulated transaction type">
+            <button class="trade-tab active" type="button" role="tab" aria-selected="true" data-trade-tab="buy">Buy stocks</button>
+            <button class="trade-tab" type="button" role="tab" aria-selected="false" data-trade-tab="sell">Sell holdings</button>
+          </div>
+          <div class="trade-grid">
+            <div class="panel form-panel trade-buy trade-active">
+              <div class="panel-header">
+                <div>
+                  <h3>Buy stock</h3>
+                  <p class="panel-subtitle">Available cash: <strong id="buyCashValue">₹0</strong></p>
+                </div>
+              </div>
+              <form id="buyForm" novalidate>
+                <div class="form-group">
+                  <label for="buyStockSelect">Select company</label>
+                  <select id="buyStockSelect"></select>
+                </div>
+
+                <div class="price-summary">
+                  <div>
+                    <span>Sample price</span>
+                    <strong id="buyPriceValue">₹0</strong>
+                  </div>
+                  <div>
+                    <span>Estimated total cost</span>
+                    <strong id="buyTotalValue">₹0</strong>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="buyQuantity">Quantity</label>
+                  <input id="buyQuantity" type="number" min="1" step="1" placeholder="Enter quantity" />
+                </div>
+
+                <div id="buyMessage" class="form-message" aria-live="polite"></div>
+                <button class="btn btn-primary" type="submit">Confirm purchase</button>
+              </form>
+            </div>
+
+            <div class="panel form-panel trade-sell">
+              <div class="panel-header">
+                <div>
+                  <h3>Sell stock</h3>
+                  <p class="panel-subtitle">Available cash: <strong id="sellCashValue">₹0</strong></p>
+                </div>
+              </div>
+              <form id="sellForm" novalidate>
+                <div class="form-group">
+                  <label for="sellStockSelect">Select stock from holdings</label>
+                  <select id="sellStockSelect"></select>
+                </div>
+
+                <div class="price-summary">
+                  <div>
+                    <span>Sample current price</span>
+                    <strong id="sellPriceValue">₹0</strong>
+                  </div>
+                  <div>
+                    <span>Estimated sale value</span>
+                    <strong id="sellTotalValue">₹0</strong>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="sellQuantity">Quantity to sell</label>
+                  <input id="sellQuantity" type="number" min="1" step="1" placeholder="Enter quantity" />
+                </div>
+
+                <div id="sellMessage" class="form-message" aria-live="polite"></div>
+                <button class="btn btn-secondary" type="submit">Confirm sale</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section id="transactions" class="page-section">
+          <div class="section-intro">
+            <div>
+              <h3>Transaction history</h3>
+              <p>Review every simulated buy and sell recorded in this browser.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header controls-row">
+              <div>
+                <h3>All transactions</h3>
+                <p class="panel-subtitle">Saved locally on this device</p>
+              </div>
+              <div class="table-controls">
+                <input id="transactionSearch" type="search" placeholder="Search transactions" aria-label="Search transactions" />
+                <select id="transactionTypeFilter" aria-label="Filter by transaction type">
+                  <option value="all">All transactions</option>
+                  <option value="BUY">Purchases</option>
+                  <option value="SELL">Sales</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table transaction-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Stock</th>
+                    <th>Symbol</th>
+                    <th>Type</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="transactionTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="drawerBackdrop" class="drawer-backdrop"></div>
+    <div class="modal fade" id="recommendationModal" tabindex="-1" aria-labelledby="recommendationModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content recommendation-modal">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow">Illustrative stock details</p>
+              <h2 class="modal-title fs-5" id="recommendationModalTitle">Stock details</h2>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body" id="recommendationModalBody"></div>
+          <div class="modal-footer">
+            <button id="modalBuyButton" class="btn btn-primary" type="button">Simulate buy</button>
+            <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/portfolio.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
