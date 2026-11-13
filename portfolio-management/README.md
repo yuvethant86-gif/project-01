@@ -31,6 +31,7 @@ portfolio-management/
 - Available balance section with spend and sales totals
 - Holdings table with search and sort controls
 - Buy and sell stock forms with validation and transaction tabs
+- Buy / Sell chart with selectable stocks, deterministic simulated OHLC candles, volume, and time-range filters
 - Top recommendation cards with sample stock data, details, and simulated buy action
 - Searchable and filterable transaction history
 - Local Storage persistence and reset demo data flow
@@ -52,6 +53,7 @@ The following scenarios were checked during implementation:
 - Purchase flow deducts the correct amount from cash and updates holdings.
 - Insufficient balance validation blocks invalid purchases.
 - Selling shares updates remaining quantity and cash balance correctly.
+- Chart stock and period selections update simulated OHLC/volume history and preserve the fixed transaction sample prices.
 - Selling more than owned is rejected.
 - Portfolio state persists across refreshes using Local Storage.
 - Reset demo data restores the original sample portfolio.

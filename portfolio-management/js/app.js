@@ -6,6 +6,10 @@
   let portfolioState = storageApi.loadPortfolioState();
   let chartInstance = null;
   let performanceChartInstance = null;
+  let stockPriceChartInstance = null;
+  let stockVolumeChartInstance = null;
+  let selectedChartSymbol = 'TCS';
+  let selectedChartPeriod = '1Y';
 
   function showToast(message, type) {
     const container = document.getElementById('toastContainer');
@@ -28,6 +32,15 @@
     document.querySelectorAll('.page-section').forEach((section) => {
       section.classList.toggle('active', section.id === sectionName);
     });
+
+    if (sectionName === 'trades') {
+      if (stockPriceChartInstance) {
+        stockPriceChartInstance.resize();
+      }
+      if (stockVolumeChartInstance) {
+        stockVolumeChartInstance.resize();
+      }
+    }
   }
 
   function renderStats() {
@@ -231,6 +244,329 @@
     });
   }
 
+  function getChartCandles(stock, period) {
+    const periodCounts = { '1W': 5, '1M': 21, '3M': 63, '1Y': 252, ALL: 1260 };
+    const count = periodCounts[period] || periodCounts['1Y'];
+    const seed = stock.symbol.split('').reduce((total, character) => total + character.charCodeAt(0), 0);
+    const candles = [];
+
+    if (period === '1D') {
+      const rawCloses = Array.from({ length: 48 }, (_, index) =>
+        1 + 0.008 * Math.sin(index * 0.28 + seed) + 0.003 * Math.cos(index * 0.17 + seed * 0.5)
+      );
+      const lastRawClose = rawCloses[rawCloses.length - 1];
+      const sessionDate = new Date();
+      sessionDate.setHours(9, 15, 0, 0);
+
+      rawCloses.forEach((rawClose, index) => {
+        const close = stock.price * rawClose / lastRawClose;
+        const previousClose = index ? candles[index - 1].close : stock.price * rawCloses[0] / lastRawClose;
+        const open = index ? previousClose * (1 + 0.0015 * Math.sin(index * 1.31 + seed)) : previousClose;
+        const spread = 0.0015 + Math.abs(Math.sin(index * 0.63 + seed)) * 0.0035;
+        const date = new Date(sessionDate.getTime() + index * 8 * 60 * 1000);
+        candles.push({
+          date,
+          open,
+          high: Math.max(open, close) * (1 + spread),
+          low: Math.min(open, close) * (1 - spread),
+          close,
+          volume: Math.round(90000 + (seed % 17) * 5500 + 42000 * Math.abs(Math.sin(index * 0.39 + seed)))
+        });
+      });
+
+      return candles;
+    }
+
+    const dates = [];
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    while (dates.length < count) {
+      const day = date.getDay();
+      if (day !== 0 && day !== 6) {
+        dates.push(new Date(date));
+      }
+      date.setDate(date.getDate() - 1);
+    }
+    dates.reverse();
+
+    const rawCloses = Array.from({ length: count }, (_, index) =>
+      1 + 0.055 * Math.sin(index * 0.073 + seed) +
+      0.022 * Math.sin(index * 0.018 + seed * 0.5) +
+      0.018 * Math.cos(index * 0.13 + seed) +
+      index * 0.00004
+    );
+    const lastRawClose = rawCloses[rawCloses.length - 1];
+
+    rawCloses.forEach((rawClose, index) => {
+      const close = stock.price * rawClose / lastRawClose;
+      const previousClose = index ? candles[index - 1].close : close * (1 - 0.003 * Math.sin(seed));
+      const open = index ? previousClose * (1 + 0.006 * Math.sin(index * 1.31 + seed)) : previousClose;
+      const spread = 0.003 + Math.abs(Math.sin(index * 0.63 + seed)) * 0.005;
+      candles.push({
+        date: dates[index],
+        open,
+        high: Math.max(open, close) * (1 + spread),
+        low: Math.min(open, close) * (1 - spread),
+        close,
+        volume: Math.round(420000 + (seed % 17) * 26000 + 320000 * Math.abs(Math.sin(index * 0.39 + seed)))
+      });
+    });
+
+    return candles;
+  }
+
+  function formatChartPrice(value) {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2
+    }).format(value);
+  }
+
+  function formatChartDate(date, period) {
+    if (period === '1D') {
+      return new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
+    }
+    return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' }).format(date);
+  }
+
+  function renderTradeChart() {
+    const stock = logicApi.getStockBySymbol(selectedChartSymbol);
+    const priceCanvas = document.getElementById('stockPriceChart');
+    const volumeCanvas = document.getElementById('stockVolumeChart');
+    if (!stock || !priceCanvas || !volumeCanvas) {
+      return;
+    }
+
+    const candles = getChartCandles(stock, selectedChartPeriod);
+    const labels = candles.map((candle) => formatChartDate(candle.date, selectedChartPeriod));
+    const firstClose = candles[0].close;
+    const lastCandle = candles[candles.length - 1];
+    const high = Math.max(...candles.map((candle) => candle.high));
+    const low = Math.min(...candles.map((candle) => candle.low));
+    const change = lastCandle.close - firstClose;
+    const changePercent = firstClose ? (change / firstClose) * 100 : 0;
+    const changeElement = document.getElementById('chartPriceChange');
+    const priceUp = change >= 0;
+
+    document.getElementById('chartCompanyName').textContent = stock.company;
+    document.getElementById('chartStockSymbol').textContent = stock.symbol;
+    document.getElementById('chartCurrentPrice').textContent = formatChartPrice(stock.price);
+    changeElement.textContent = `${priceUp ? '+' : ''}${formatChartPrice(change)} (${priceUp ? '+' : ''}${changePercent.toFixed(2)}%)`;
+    changeElement.className = priceUp ? 'positive' : 'negative';
+    document.getElementById('chartHighPrice').textContent = formatChartPrice(high);
+    document.getElementById('chartLowPrice').textContent = formatChartPrice(low);
+    document.getElementById('chartOpenPrice').textContent = formatChartPrice(candles[0].open);
+    document.getElementById('chartClosePrice').textContent = formatChartPrice(lastCandle.close);
+
+    const candlePlugin = {
+      id: 'tradeCandles',
+      afterDatasetsDraw(chart) {
+        const chartCandles = candles;
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+        const area = chart.chartArea;
+        if (!chartCandles || !xScale || !yScale || !area) {
+          return;
+        }
+
+        const context = chart.ctx;
+        const candleWidth = Math.max(2, Math.min(12, (area.right - area.left) / chartCandles.length * 0.58));
+        context.save();
+        context.beginPath();
+        context.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
+        context.clip();
+        chartCandles.forEach((candle, index) => {
+          const x = xScale.getPixelForValue(index);
+          const up = candle.close >= candle.open;
+          const color = up ? '#27c995' : '#f06472';
+          const openY = yScale.getPixelForValue(candle.open);
+          const closeY = yScale.getPixelForValue(candle.close);
+          context.strokeStyle = color;
+          context.fillStyle = color;
+          context.lineWidth = 1.2;
+          context.beginPath();
+          context.moveTo(x, yScale.getPixelForValue(candle.high));
+          context.lineTo(x, yScale.getPixelForValue(candle.low));
+          context.stroke();
+          context.fillRect(x - candleWidth / 2, Math.min(openY, closeY), candleWidth, Math.max(1.5, Math.abs(closeY - openY)));
+        });
+        context.restore();
+      },
+      afterDraw(chart) {
+        const activeElements = chart.tooltip ? chart.tooltip.getActiveElements() : [];
+        if (!activeElements.length) {
+          return;
+        }
+        const area = chart.chartArea;
+        const x = chart.tooltip.caretX;
+        const y = chart.tooltip.caretY;
+        const context = chart.ctx;
+        context.save();
+        context.strokeStyle = 'rgba(190, 202, 220, 0.42)';
+        context.lineWidth = 1;
+        context.setLineDash([3, 4]);
+        context.beginPath();
+        context.moveTo(x, area.top);
+        context.lineTo(x, area.bottom);
+        context.moveTo(area.left, y);
+        context.lineTo(area.right, y);
+        context.stroke();
+        context.restore();
+      }
+    };
+
+    if (stockPriceChartInstance) {
+      stockPriceChartInstance.destroy();
+    }
+    if (stockVolumeChartInstance) {
+      stockVolumeChartInstance.destroy();
+    }
+
+    stockPriceChartInstance = new Chart(priceCanvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: candles.map((candle) => candle.close),
+          borderColor: 'rgba(0, 0, 0, 0)',
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+          pointRadius: 0,
+          pointHoverRadius: 3,
+          pointHitRadius: 12
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        hover: { mode: 'index', intersect: false },
+        layout: { padding: { top: 4, left: 3, right: 3 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            displayColors: false,
+            backgroundColor: '#111b2b',
+            borderColor: 'rgba(159, 177, 204, 0.2)',
+            borderWidth: 1,
+            titleColor: '#dce5f2',
+            bodyColor: '#c1ccdc',
+            padding: 11,
+            callbacks: {
+              title(items) {
+                const candle = candles[items[0].dataIndex];
+                return new Intl.DateTimeFormat('en-IN', {
+                  dateStyle: 'medium',
+                  timeStyle: selectedChartPeriod === '1D' ? 'short' : undefined
+                }).format(candle.date);
+              },
+              label(context) {
+                const candle = candles[context.dataIndex];
+                return [
+                  `Open  ${formatChartPrice(candle.open)}`,
+                  `High  ${formatChartPrice(candle.high)}`,
+                  `Low   ${formatChartPrice(candle.low)}`,
+                  `Close ${formatChartPrice(candle.close)}`
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(159, 177, 204, 0.055)', drawTicks: false },
+            ticks: { display: false },
+            border: { display: false }
+          },
+          y: {
+            position: 'right',
+            min: low - (high - low) * 0.06,
+            max: high + (high - low) * 0.06,
+            afterFit(scale) { scale.width = 62; },
+            grid: { color: 'rgba(159, 177, 204, 0.09)' },
+            ticks: {
+              color: '#8290a6',
+              maxTicksLimit: 6,
+              font: { size: 10 },
+              callback(value) { return formatChartPrice(value); }
+            },
+            border: { display: false }
+          }
+        }
+      },
+      plugins: [candlePlugin]
+    });
+    stockVolumeChartInstance = new Chart(volumeCanvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data: candles.map((candle) => candle.volume),
+          backgroundColor: candles.map((candle) => candle.close >= candle.open ? 'rgba(39, 201, 149, 0.58)' : 'rgba(240, 100, 114, 0.58)'),
+          borderWidth: 0,
+          barPercentage: 0.84,
+          categoryPercentage: 0.94
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        layout: { padding: { left: 3, right: 3 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            displayColors: false,
+            backgroundColor: '#111b2b',
+            callbacks: {
+              title(items) { return labels[items[0].dataIndex]; },
+              label(context) { return `Volume  ${new Intl.NumberFormat('en-IN').format(context.parsed.y)}`; }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: '#8290a6',
+              maxTicksLimit: 7,
+              maxRotation: 0,
+              font: { size: 9 }
+            },
+            border: { display: false }
+          },
+          y: {
+            position: 'right',
+            beginAtZero: true,
+            afterFit(scale) { scale.width = 62; },
+            grid: { color: 'rgba(159, 177, 204, 0.07)' },
+            ticks: {
+              color: '#718097',
+              maxTicksLimit: 3,
+              font: { size: 9 },
+              callback(value) { return value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${Math.round(value / 1000)}K`; }
+            },
+            border: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  function selectChartStock(symbol) {
+    if (!logicApi.getStockBySymbol(symbol)) {
+      return;
+    }
+    selectedChartSymbol = symbol;
+    document.getElementById('chartStockSelect').value = symbol;
+    renderTradeChart();
+  }
+
   function hexToRgba(hex, alpha) {
     const normalizedHex = hex.replace('#', '');
     const bigint = parseInt(normalizedHex, 16);
@@ -302,6 +638,7 @@
         setTradeMode('buy');
         const buySelect = document.getElementById('buyStockSelect');
         buySelect.value = button.dataset.buySymbol;
+        selectChartStock(button.dataset.buySymbol);
         updateBuyPreview();
       });
     });
@@ -379,6 +716,7 @@
         setSection('trades');
         setTradeMode('sell');
         document.getElementById('sellStockSelect').value = button.dataset.sellSymbol;
+        selectChartStock(button.dataset.sellSymbol);
         updateSellPreview();
       });
     });
@@ -417,15 +755,19 @@
   function renderTradeForms() {
     const buySelect = document.getElementById('buyStockSelect');
     const sellSelect = document.getElementById('sellStockSelect');
+    const chartSelect = document.getElementById('chartStockSelect');
     const buyQuantityInput = document.getElementById('buyQuantity');
     const sellQuantityInput = document.getElementById('sellQuantity');
 
     buyQuantityInput.value = '';
     sellQuantityInput.value = '';
 
-    buySelect.innerHTML = dataApi.SAMPLE_STOCKS.map((stock) => `
+    const stockOptions = dataApi.SAMPLE_STOCKS.map((stock) => `
       <option value="${stock.symbol}">${stock.company} (${stock.symbol})</option>
     `).join('');
+    buySelect.innerHTML = stockOptions;
+    chartSelect.innerHTML = stockOptions;
+    chartSelect.value = selectedChartSymbol;
 
     const sellOptions = portfolioState.holdings.map((holding) => `
       <option value="${holding.symbol}">${holding.company} (${holding.symbol})</option>
@@ -450,6 +792,7 @@
     document.getElementById('sellCashValue').textContent = logicApi.formatCurrency(portfolioState.cashBalance);
     updateBuyPreview();
     updateSellPreview();
+    renderTradeChart();
   }
 
   function setTradeMode(mode) {
@@ -584,11 +927,32 @@
       });
     });
 
-    document.getElementById('buyStockSelect').addEventListener('change', updateBuyPreview);
+    document.getElementById('chartStockSelect').addEventListener('change', (event) => {
+      selectChartStock(event.currentTarget.value);
+    });
+    document.querySelectorAll('[data-chart-period]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedChartPeriod = button.dataset.chartPeriod;
+        document.querySelectorAll('[data-chart-period]').forEach((periodButton) => {
+          const active = periodButton === button;
+          periodButton.classList.toggle('active', active);
+          periodButton.setAttribute('aria-pressed', String(active));
+        });
+        renderTradeChart();
+      });
+    });
+
+    document.getElementById('buyStockSelect').addEventListener('change', (event) => {
+      updateBuyPreview();
+      selectChartStock(event.currentTarget.value);
+    });
     document.getElementById('buyQuantity').addEventListener('input', updateBuyPreview);
     document.getElementById('buyForm').addEventListener('submit', handleBuySubmit);
 
-    document.getElementById('sellStockSelect').addEventListener('change', updateSellPreview);
+    document.getElementById('sellStockSelect').addEventListener('change', (event) => {
+      updateSellPreview();
+      selectChartStock(event.currentTarget.value);
+    });
     document.getElementById('sellQuantity').addEventListener('input', updateSellPreview);
     document.getElementById('sellForm').addEventListener('submit', handleSellSubmit);
 
@@ -620,6 +984,7 @@
       setSection('trades');
       setTradeMode('buy');
       document.getElementById('buyStockSelect').value = symbol;
+      selectChartStock(symbol);
       updateBuyPreview();
     });
 
